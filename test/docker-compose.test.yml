@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Fresh Cloud Provider Simulation - Control Plane
   fresh-control-plane:
@@ -11,10 +9,7 @@ services:
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - tmpfs:/tmp
-      - tmpfs:/run
-      - tmpfs:/run/lock
-      - ../:/root/server-setup:ro  # Mount project files for testing
+      - ../:/root/srvs:ro  # Mount project files for testing
     networks:
       fresh-cloud-test:
         ipv4_address: 172.21.0.10
@@ -24,6 +19,7 @@ services:
       - "9090:9090"   # Prometheus
       - "3001:3001"   # Grafana
     tmpfs:
+      - /tmp
       - /run
       - /run/lock
     command: /sbin/init
@@ -38,16 +34,14 @@ services:
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - tmpfs:/tmp
-      - tmpfs:/run
-      - tmpfs:/run/lock
-      - ../:/root/server-setup:ro  # Mount project files for testing
+      - ../:/root/srvs:ro  # Mount project files for testing
     networks:
       fresh-cloud-test:
         ipv4_address: 172.21.0.11
     ports:
       - "2278:22"     # SSH
     tmpfs:
+      - /tmp
       - /run
       - /run/lock
     environment:

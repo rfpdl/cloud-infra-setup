@@ -2,7 +2,7 @@
 
 # Server Initial Setup Script (combined 1-init + 2-init)
 # Complete initial security hardening for Ubuntu 24.04 LTS
-# Run as root: sudo bash 1-init.sh
+# Run as root: sudo bash 1-server-hardening.sh
 
 set -e
 
@@ -52,8 +52,10 @@ validate_config() {
         missing_vars+=("PERSONAL_SSH_KEY")
     fi
     
-    if [ -z "$CONTROL_PLANE_SSH_KEY" ]; then
-        missing_vars+=("CONTROL_PLANE_SSH_KEY")
+    # CONTROL_PLANE_SSH_KEY is optional - can be same as PERSONAL_SSH_KEY
+    # Only require it if PERSONAL_SSH_KEY is also empty
+    if [ -z "$CONTROL_PLANE_SSH_KEY" ] && [ -z "$PERSONAL_SSH_KEY" ]; then
+        missing_vars+=("At least one SSH key (PERSONAL_SSH_KEY or CONTROL_PLANE_SSH_KEY)")
     fi
     
     if [ ${#missing_vars[@]} -gt 0 ]; then
@@ -146,12 +148,22 @@ if [ -f "/home/${USERNAME}/.ssh/authorized_keys" ] && ! grep -q "# SSH keys shou
     echo -e "${BLUE}SSH keys already configured, skipping...${NC}"
 else
     echo -e "${YELLOW}Adding SSH authorized keys...${NC}"
-    cat > "/home/${USERNAME}/.ssh/authorized_keys" << EOF
-# Personal key
-${PERSONAL_SSH_KEY}
-# Control Plane key
-${CONTROL_PLANE_SSH_KEY}
-EOF
+    
+    # Create authorized_keys file with proper deduplication
+    {
+        echo "# Personal SSH Key"
+        echo "${PERSONAL_SSH_KEY}"
+        
+        # Add control plane key if provided and different from personal key
+        if [ -n "${CONTROL_PLANE_SSH_KEY}" ] && [ "${PERSONAL_SSH_KEY}" != "${CONTROL_PLANE_SSH_KEY}" ]; then
+            echo "# Control Plane SSH Key"
+            echo "${CONTROL_PLANE_SSH_KEY}"
+        elif [ -z "${PERSONAL_SSH_KEY}" ] && [ -n "${CONTROL_PLANE_SSH_KEY}" ]; then
+            # If no personal key but control plane key exists, use it as primary
+            echo "# Primary SSH Key (from CONTROL_PLANE_SSH_KEY)"
+            echo "${CONTROL_PLANE_SSH_KEY}"
+        fi
+    } > "/home/${USERNAME}/.ssh/authorized_keys"
     echo -e "${GREEN}SSH keys configured${NC}"
 fi
 
@@ -226,7 +238,7 @@ mkdir -p /var/lib/cloud/instance
 mkdir -p /var/lib/manual-init
 touch /var/lib/cloud/instance/boot-finished
 touch /var/lib/manual-init/boot-finished
-echo "$(date): Initial setup completed via 1-init.sh" > /var/lib/manual-init/setup.log
+echo "$(date): Initial setup completed via 1-server-hardening.sh" > /var/lib/manual-init/setup.log
 
 echo -e "${GREEN}✅ Complete server initial setup finished successfully!${NC}"
 echo -e "${BLUE}Configuration Summary:${NC}"

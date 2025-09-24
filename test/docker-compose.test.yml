@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # Fresh Cloud Provider Simulation - Control Plane
+  fresh-control-plane:
+    build:
+      context: ../
+      dockerfile: test/Dockerfile.test
+    container_name: fresh-control-plane
+    hostname: control-plane
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - tmpfs:/tmp
+      - tmpfs:/run
+      - tmpfs:/run/lock
+      - ../:/root/server-setup:ro  # Mount project files for testing
+    networks:
+      fresh-cloud-test:
+        ipv4_address: 172.21.0.10
+    ports:
+      - "2277:22"     # SSH
+      - "3000:3000"   # Dokploy
+      - "9090:9090"   # Prometheus
+      - "3001:3001"   # Grafana
+    tmpfs:
+      - /run
+      - /run/lock
+    command: /sbin/init
+
+  # Fresh Cloud Provider Simulation - Worker
+  fresh-worker:
+    build:
+      context: ../
+      dockerfile: test/Dockerfile.test
+    container_name: fresh-worker
+    hostname: worker
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - tmpfs:/tmp
+      - tmpfs:/run
+      - tmpfs:/run/lock
+      - ../:/root/server-setup:ro  # Mount project files for testing
+    networks:
+      fresh-cloud-test:
+        ipv4_address: 172.21.0.11
+    ports:
+      - "2278:22"     # SSH
+    tmpfs:
+      - /run
+      - /run/lock
+    environment:
+      - ROLE=worker
+      - CONTROL_PLANE_IP=172.21.0.10
+    depends_on:
+      - fresh-control-plane
+    command: /sbin/init
+
+networks:
+  fresh-cloud-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  test-results:

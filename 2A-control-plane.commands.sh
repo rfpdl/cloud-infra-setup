@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Control Plane Configuration Script
-# Run after 1-init.sh to configure Dokploy control plane
+# Run after 1-server-hardening.sh to configure Dokploy control plane
 
 set -e
 

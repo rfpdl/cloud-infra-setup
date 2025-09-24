@@ -54,7 +54,7 @@ make worker
 
 - **`0-cloud-config.yml`**: Cloud-init configuration for supported providers (git install, repo clone, permissions)
 - **`0-cloud-config.sh`**: Manual setup script for providers without cloud-init support
-- **`1-init.sh`**: Base server setup (users, SSH hardening, Docker, fail2ban)
+- **`1-server-hardening.sh`**: Base server setup (users, SSH hardening, Docker, fail2ban)
 - **`2A-control-plane.commands.sh`**: Control plane configuration (Dokploy, Grafana, Prometheus)
 - **`2B-worker.commands.sh`**: Worker configuration (Docker Swarm worker)
 - **`3A-control-plane-test.sh`**: Control plane configuration testing
@@ -82,3 +82,48 @@ All scripts use environment variables from `.env` file with sensible defaults:
 - Fail2ban intrusion prevention
 - UFW firewall with role-specific rules
 - Worker nodes locked down to control plane IP only
+
+## Testing & Development
+
+Test your setup locally using Docker containers that simulate fresh cloud provider installations:
+
+### Quick Test
+```bash
+# Test both control-plane and worker setups (simulates real cloud deployment)
+make test
+
+# Clean up test environment
+make test-cleanup
+```
+
+### Manual Testing
+```bash
+# Start fresh cloud simulation containers
+docker-compose -f test/docker-compose.test.yml up -d
+
+# Access fresh control plane container (starts as root, like real cloud servers)
+docker exec -it fresh-control-plane bash
+
+# Access fresh worker container
+docker exec -it fresh-worker bash
+
+# Test the complete workflow manually:
+# 1. Run cloud-config script (simulates cloud provider setup)
+curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-bootstrap/main/0-cloud-config.sh | bash
+
+# 2. Switch to ubuntu user and configure
+su - ubuntu
+cd server-setup
+cp .env.example .env
+vim .env  # Add your SSH keys
+
+# 3. Run setup
+make control-plane  # or make worker
+```
+
+**Fresh Test Environment Features:**
+- **Bare Ubuntu 24.04 LTS**: No pre-installed packages (like real cloud providers)
+- **Fresh networking**: Control-plane (172.21.0.10), Worker (172.21.0.11)
+- **SSH access**: Ports 2230 (control-plane) and 2231 (worker)
+- **Service ports**: 3010 (Dokploy), 3011 (Grafana), 9091 (Prometheus)
+- **True simulation**: Tests complete workflow from blank server to production-ready

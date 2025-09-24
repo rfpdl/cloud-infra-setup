@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Worker Configuration Script
-# Run after 1-init.sh to configure Docker Swarm worker
+# Run after 1-server-hardening.sh to configure Docker Swarm worker
 
 set -e
 

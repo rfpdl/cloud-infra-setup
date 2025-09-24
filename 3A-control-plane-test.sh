@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Control Plane Configuration Test Script
-# Tests control plane specific configuration after running 1-init.sh + 2A-control-plane.commands.sh
+# Tests control plane specific configuration after running 1-server-hardening.sh + 2A-control-plane.commands.sh
 
 set -e
 
@@ -314,7 +314,7 @@ test_system_security() {
 main() {
     echo -e "${BLUE}🔍 Control Plane Configuration Test Suite${NC}"
     echo -e "${BLUE}=========================================${NC}"
-    echo -e "${BLUE}Testing: 1-init.sh + 2A-control-plane.commands.sh${NC}"
+    echo -e "${BLUE}Testing: 1-server-hardening.sh + 2A-control-plane.commands.sh${NC}"
     
     # Run all tests
     test_user_setup

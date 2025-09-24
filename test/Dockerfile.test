@@ -1,0 +1,35 @@
+FROM ubuntu:24.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# MINIMAL cloud provider simulation - only what comes by default
+# Adding curl for cloud-config script download (standard on most cloud providers)
+RUN apt-get update && apt-get install -y \
+    systemd \
+    systemd-sysv \
+    sudo \
+    openssh-server \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create root user setup (simulating cloud provider default)
+RUN mkdir -p /root/.ssh && \
+    chmod 700 /root/.ssh
+
+# Enable SSH service
+RUN systemctl enable ssh
+
+# Enable systemd
+RUN systemctl set-default multi-user.target
+
+# Expose SSH port
+EXPOSE 22
+
+# Start with root user (like fresh cloud server)
+USER root
+WORKDIR /root
+
+# Simulate cloud provider startup
+CMD ["/sbin/init"]

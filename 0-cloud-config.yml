@@ -20,6 +20,7 @@ package_upgrade: true
 
 packages:
   - git
+  - make
   - curl
   - wget
   - unzip
@@ -28,7 +29,7 @@ packages:
   - fail2ban
   - docker.io
   - docker-compose
-  - make
+  - docker-compose-plugin
 
 # Minimal SSH hardening (do not change port here to avoid lockout)
 write_files:

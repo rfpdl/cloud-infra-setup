@@ -106,6 +106,16 @@ EOF
 # Enable and start Docker
 echo -e "${YELLOW}Starting Docker service...${NC}"
 systemctl enable docker
+
+# Workaround Ubuntu default '-H fd://' in systemd unit which conflicts with daemon.json 'hosts'
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+EOF
+
+systemctl daemon-reload
 systemctl restart docker
 echo -e "${GREEN}Docker service started with Unix socket only${NC}"
 

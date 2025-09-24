@@ -108,6 +108,7 @@ apt install -y \
     ufw \
     docker.io \
     docker-compose \
+    docker-compose-plugin \
     vim \
     tree \
     htop \
@@ -221,17 +222,57 @@ echo -e "${YELLOW}Starting fail2ban service...${NC}"
 systemctl enable fail2ban
 systemctl start fail2ban
 
-# 12. Enable and start Docker
-echo -e "${YELLOW}Starting Docker service...${NC}"
+# 12. Configure Docker to use Unix socket only and start service
+echo -e "${YELLOW}Configuring Docker daemon to use Unix socket only...${NC}"
+mkdir -p /etc/docker
+if [ -f /etc/docker/daemon.json ]; then
+  cp /etc/docker/daemon.json /etc/docker/daemon.json.backup || true
+fi
+cat > /etc/docker/daemon.json << EOF
+{
+  "hosts": ["unix:///var/run/docker.sock"]
+}
+EOF
+
+# Workaround default systemd '-H fd://' which conflicts with daemon.json hosts
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+EOF
+
+systemctl daemon-reload
 systemctl enable docker
-systemctl start docker
+echo -e "${YELLOW}Starting Docker service...${NC}"
+# Ensure containerd is running (required by dockerd)
+systemctl enable --now containerd || true
+if systemctl restart docker; then
+  echo -e "${GREEN}Docker service started with Unix socket only${NC}"
+else
+  echo -e "${RED}Docker failed to start with custom systemd override. Collecting logs...${NC}"
+  systemctl status docker -n 50 || true
+  journalctl -xeu docker.service -n 100 --no-pager || true
+  echo -e "${YELLOW}Attempting fallback: remove override and daemon.json hosts, then restart Docker...${NC}"
+  rm -f /etc/systemd/system/docker.service.d/override.conf || true
+  systemctl daemon-reload
+  if [ -f /etc/docker/daemon.json ]; then
+    grep -q '"hosts"' /etc/docker/daemon.json && (echo '{}' > /etc/docker/daemon.json) || true
+  fi
+  if systemctl restart docker; then
+    echo -e "${GREEN}Docker service started with default system configuration${NC}"
+  else
+    echo -e "${RED}Docker still failed to start after fallback. Please review system logs above.${NC}"
+    exit 1
+  fi
+fi
 
 # 13. Add user to docker group (redundant but ensures it's set)
 usermod -aG docker "$USERNAME"
 
 # 14. Restart SSH to apply hardening
 echo -e "${YELLOW}Restarting SSH service...${NC}"
-systemctl restart sshd
+systemctl restart ssh
 
 # 15. Create completion markers (compatible with both cloud-init and manual setup)
 mkdir -p /var/lib/cloud/instance

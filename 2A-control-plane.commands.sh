@@ -99,8 +99,36 @@ EOF
 # Enable and start Docker
 echo -e "${YELLOW}Starting Docker service...${NC}"
 systemctl enable docker
-systemctl restart docker
-echo -e "${GREEN}Docker service started with Unix socket only${NC}"
+
+# Workaround Ubuntu default '-H fd://' in systemd unit which conflicts with daemon.json 'hosts'
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+EOF
+
+systemctl daemon-reload
+if systemctl restart docker; then
+  echo -e "${GREEN}Docker service started with Unix socket only${NC}"
+else
+  echo -e "${RED}Docker failed to start with custom systemd override. Collecting logs...${NC}"
+  systemctl status docker -n 50 || true
+  journalctl -xeu docker.service -n 100 --no-pager || true
+  echo -e "${YELLOW}Attempting fallback: remove override and daemon.json hosts, then restart Docker...${NC}"
+  rm -f /etc/systemd/system/docker.service.d/override.conf || true
+  systemctl daemon-reload
+  # Fallback daemon.json without hosts entry
+  if [ -f /etc/docker/daemon.json ]; then
+    grep -q '"hosts"' /etc/docker/daemon.json && (echo '{}' > /etc/docker/daemon.json) || true
+  fi
+  if systemctl restart docker; then
+    echo -e "${GREEN}Docker service started with default system configuration${NC}"
+  else
+    echo -e "${RED}Docker still failed to start after fallback. Please review system logs above.${NC}"
+    exit 1
+  fi
+fi
 
 # 10. Create the /etc/dokploy directory and set permissions
 echo -e "${YELLOW}Setting up Dokploy directory...${NC}"
@@ -128,7 +156,16 @@ echo -e "${GREEN}Docker permissions configured${NC}"
 # 13. Initialize Docker for the user and test
 echo -e "${YELLOW}Testing Docker access...${NC}"
 sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker ps 2>/dev/null || true
-sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker compose version
+if sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker compose version >/dev/null 2>&1; then
+  echo -e "${GREEN}Docker Compose v2 available (docker compose)${NC}"
+elif command -v docker-compose >/dev/null 2>&1; then
+  sudo -u ${USERNAME} docker-compose --version
+  echo -e "${YELLOW}Using legacy docker-compose binary (v1). Consider installing docker-compose-plugin for v2.${NC}"
+else
+  echo -e "${RED}Docker Compose not found. Install one of the following:${NC}"
+  echo -e "  - ${YELLOW}docker-compose-plugin${NC} (preferred, provides 'docker compose')"
+  echo -e "  - ${YELLOW}docker-compose${NC} (legacy binary)"
+fi
 echo -e "${GREEN}Docker access verified${NC}"
 
 # 14. Create the docker network

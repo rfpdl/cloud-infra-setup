@@ -37,25 +37,36 @@ vim .env  # Add your SSH keys and configuration
 ### 3. One-Command Setup
 ```bash
 # For Control Plane server
-make control-plane
+make control-plane         # Base setup + tests (does NOT install Dokploy itself)
 
 # OR for Worker server
 make worker
 ```
 
 **Available Make Targets:**
-- `make control-plane`: Full control plane setup + testing
+- `make control-plane`: Control plane base setup + testing (firewall, Docker, users, SSH, Dokploy network). Dokploy is NOT installed by this target.
 - `make worker`: Full worker setup + testing  
 - `make test-control-plane`: Test control plane only
 - `make test-worker`: Test worker only
-- `make init-only`: Run initial setup only
+- `make init-only`: Run only initial setup (1-server-hardening.sh)
+
+### 4. Install Dokploy (after control-plane)
+```bash
+curl -sSL https://dokploy.com/install.sh | sh
+```
+
+Once installed, access Dokploy UI at:
+- http://YOUR_SERVER_IP:3000
+
+Notes:
+- Grafana (3001) and Prometheus (9090) are not installed by default. You can deploy them via Dokploy or with your own Compose stack.
 
 ## Scripts Overview
 
 - **`0-cloud-config.yml`**: Cloud-init configuration for supported providers (git install, repo clone, permissions)
 - **`0-cloud-config.sh`**: Manual setup script for providers without cloud-init support
 - **`1-server-hardening.sh`**: Base server setup (users, SSH hardening, Docker, fail2ban)
-- **`2A-control-plane.commands.sh`**: Control plane configuration (Dokploy, Grafana, Prometheus)
+- **`2A-control-plane.commands.sh`**: Control plane preparation (users, firewall, Docker, Dokploy network, opens ports). It does not install Dokploy/monitoring.
 - **`2B-worker.commands.sh`**: Worker configuration (Docker Swarm worker)
 - **`3A-control-plane-test.sh`**: Control plane configuration testing
 - **`3B-worker-test.sh`**: Worker configuration testing

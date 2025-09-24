@@ -184,6 +184,15 @@ test_control_plane_firewall() {
     else
         print_fail "Docker Swarm management ports not configured"
     fi
+
+    print_test "Docker TCP API ports 2375/2376 are NOT allowed in UFW"
+    if ufw status | grep -E "2375/tcp|2376/tcp" | grep -qi "deny"; then
+        print_pass "UFW denies Docker TCP API ports"
+    elif ! ufw status | grep -qE "2375/tcp|2376/tcp"; then
+        print_pass "No UFW allow rules found for 2375/2376"
+    else
+        print_fail "Found UFW allow rule for Docker TCP API (2375/2376)"
+    fi
 }
 
 test_fail2ban_configuration() {
@@ -255,6 +264,20 @@ test_docker_configuration() {
         print_pass "Dokploy network exists"
     else
         print_fail "Dokploy network not found"
+    fi
+
+    print_test "Docker daemon is bound to Unix socket only"
+    if [ -f "/etc/docker/daemon.json" ] && grep -q '"unix:///var/run/docker.sock"' /etc/docker/daemon.json; then
+        print_pass "daemon.json configured for Unix socket"
+    else
+        print_fail "daemon.json missing or not set to Unix socket"
+    fi
+
+    print_test "No Docker TCP API listeners on 2375/2376"
+    if ! ss -tlnp 2>/dev/null | grep -qE ":2375|:2376"; then
+        print_pass "No Docker TCP API listeners detected"
+    else
+        print_fail "Docker TCP API listener detected on 2375/2376"
     fi
 }
 

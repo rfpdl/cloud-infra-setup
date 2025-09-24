@@ -9,7 +9,7 @@ Automated Ubuntu 24.04 LTS server configuration for Cloud Provider cloud infrast
 **Option A: Cloud Providers with cloud-init support (Hetzner, AWS, DigitalOcean, etc.)**
 Use `0-cloud-config.yml` when creating your server. This will:
 - Install git and essential packages
-- Clone this repository to `/home/ubuntu/server-setup`
+- Clone this repository to `/home/ubuntu/srvs`
 - Set proper permissions on scripts
 
 **Option B: Cloud Providers without cloud-init or manual setup**
@@ -24,14 +24,14 @@ curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-setup/main/0-clou
 ssh ubuntu@YOUR_SERVER_IP
 
 # For both options, configure your environment:
-cd server-setup
+cd srvs
 cp .env.example .env
 vim .env  # Add your SSH keys and configuration
 ```
 
 **Required Variables:**
-- `PERSONAL_SSH_KEY`: Your personal SSH public key
-- `CONTROL_PLANE_SSH_KEY`: Control plane SSH public key
+- `PERSONAL_SSH_KEY`: Your personal SSH public key (can be used for both roles)
+- `CONTROL_PLANE_SSH_KEY`: Control plane SSH public key (optional if same as personal)
 - `CONTROL_PLANE_IP`: IP address of control plane (for workers)
 
 ### 3. One-Command Setup
@@ -109,11 +109,11 @@ docker exec -it fresh-worker bash
 
 # Test the complete workflow manually:
 # 1. Run cloud-config script (simulates cloud provider setup)
-curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-bootstrap/main/0-cloud-config.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-setup/main/0-cloud-config.sh | bash
 
 # 2. Switch to ubuntu user and configure
 su - ubuntu
-cd server-setup
+cd srvs
 cp .env.example .env
 vim .env  # Add your SSH keys
 
@@ -124,6 +124,6 @@ make control-plane  # or make worker
 **Fresh Test Environment Features:**
 - **Bare Ubuntu 24.04 LTS**: No pre-installed packages (like real cloud providers)
 - **Fresh networking**: Control-plane (172.21.0.10), Worker (172.21.0.11)
-- **SSH access**: Ports 2230 (control-plane) and 2231 (worker)
-- **Service ports**: 3010 (Dokploy), 3011 (Grafana), 9091 (Prometheus)
+- **SSH access**: Ports 2277 (control-plane) and 2278 (worker)
+- **Service ports**: 3000 (Dokploy), 3001 (Grafana), 9090 (Prometheus)
 - **True simulation**: Tests complete workflow from blank server to production-ready

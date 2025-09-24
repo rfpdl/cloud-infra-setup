@@ -83,15 +83,31 @@ ufw allow from $CONTROL_PLANE_IP to any port 4789 proto udp comment 'Overlay Net
 ufw allow out 443/tcp comment 'HTTPS outbound'
 ufw allow out 80/tcp comment 'HTTP outbound'
 
+# SECURITY: Explicitly deny Docker remote API ports (should use SSH, not TCP)
+ufw deny 2375/tcp comment 'Block Docker API (unencrypted)'
+ufw deny 2376/tcp comment 'Block Docker API (TLS)'
+
 ufw reload
 ufw --force enable
 echo -e "${GREEN}Firewall configured for Worker (restricted to ${CONTROL_PLANE_IP})${NC}"
 
-# 9. Enable and start Docker
+# 9. Ensure Docker only listens on Unix socket (no TCP API)
+echo -e "${YELLOW}Configuring Docker daemon to use Unix socket only...${NC}"
+mkdir -p /etc/docker
+if [ -f /etc/docker/daemon.json ]; then
+  cp /etc/docker/daemon.json /etc/docker/daemon.json.backup || true
+fi
+cat > /etc/docker/daemon.json << EOF
+{
+  "hosts": ["unix:///var/run/docker.sock"]
+}
+EOF
+
+# Enable and start Docker
 echo -e "${YELLOW}Starting Docker service...${NC}"
 systemctl enable docker
-systemctl start docker
-echo -e "${GREEN}Docker service started${NC}"
+systemctl restart docker
+echo -e "${GREEN}Docker service started with Unix socket only${NC}"
 
 # 10. Create the /etc/dokploy directory and set permissions
 echo -e "${YELLOW}Setting up Dokploy directory...${NC}"

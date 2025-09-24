@@ -1,17 +1,22 @@
 #cloud-config
 
-# Hetzner Cloud-Config for Server Setup
-# This will install git and pull the server configuration scripts
+# Cloud-init for initial provisioning
+# - Creates the default 'ubuntu' user with SSH key
+# - Installs essential packages
+# - Clones this repository to /home/ubuntu/srvs
+# Advanced hardening and role setup are handled by repository scripts.
 
 users:
   - name: ubuntu
-    groups: users, admin, sudo
-    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: [users, admin, sudo]
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
     shell: /bin/bash
     lock_passwd: true
     ssh_authorized_keys:
-      # SSH keys will be managed by the setup scripts
-      # Add your temporary key here if needed for initial access
+      - ${ssh_public_key}
+
+package_update: true
+package_upgrade: true
 
 packages:
   - git
@@ -19,28 +24,35 @@ packages:
   - wget
   - unzip
   - vim
+  - ufw
+  - fail2ban
+  - docker.io
+  - docker-compose
 
-package_update: true
-package_upgrade: true
+# Minimal SSH hardening (do not change port here to avoid lockout)
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-cloud-init.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
 
 runcmd:
-  # Clone the server setup repository
-  - cd /home/ubuntu
-  - git clone https://github.com/rfpdl/cloud-infra-setup.git server-setup
-  - chown -R ubuntu:ubuntu /home/ubuntu/server-setup
-  - chmod +x /home/ubuntu/server-setup/*.sh
-  
-  # Create a completion marker
-  - touch /var/lib/cloud/instance/cloud-config-finished
-  - echo "$(date): Cloud-config completed - server-setup repo cloned" > /var/log/cloud-config-setup.log
+  - [ bash, -lc, 'cd /home/ubuntu && git clone https://github.com/rfpdl/cloud-infra-setup.git srvs' ]
+  - [ chown, -R, ubuntu:ubuntu, /home/ubuntu/srvs ]
+  - [ bash, -lc, 'chmod +x /home/ubuntu/srvs/*.sh || true' ]
+  - [ systemctl, restart, sshd ]
+  - [ bash, -lc, 'touch /var/lib/cloud/instance/cloud-config-finished' ]
+  - [ bash, -lc, 'echo "$(date): Cloud-config completed - repo cloned to /home/ubuntu/srvs" > /var/log/cloud-config-setup.log' ]
 
 final_message: |
-  Server setup repository has been cloned to /home/ubuntu/server-setup
-  
+  Repository cloned to /home/ubuntu/srvs
+
   Next steps:
   1. SSH to server: ssh ubuntu@YOUR_SERVER_IP
-  2. cd server-setup
+  2. cd /home/ubuntu/srvs
   3. cp .env.example .env && vim .env
-  4. make control-plane (or make worker)
+  4. make control-plane    # or make worker
 
-# Removed automatic reboot to allow immediate configuration
+# No automatic reboot — scripts handle services and restarts as needed

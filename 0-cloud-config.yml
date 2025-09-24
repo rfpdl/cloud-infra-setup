@@ -1,0 +1,46 @@
+#cloud-config
+
+# Hetzner Cloud-Config for Server Setup
+# This will install git and pull the server configuration scripts
+
+users:
+  - name: ubuntu
+    groups: users, admin, sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      # SSH keys will be managed by the setup scripts
+      # Add your temporary key here if needed for initial access
+
+packages:
+  - git
+  - curl
+  - wget
+  - unzip
+  - vim
+
+package_update: true
+package_upgrade: true
+
+runcmd:
+  # Clone the server setup repository
+  - cd /home/ubuntu
+  - git clone https://github.com/rfpdl/cloud-infra-setup.git server-setup
+  - chown -R ubuntu:ubuntu /home/ubuntu/server-setup
+  - chmod +x /home/ubuntu/server-setup/*.sh
+  
+  # Create a completion marker
+  - touch /var/lib/cloud/instance/cloud-config-finished
+  - echo "$(date): Cloud-config completed - server-setup repo cloned" > /var/log/cloud-config-setup.log
+
+final_message: |
+  Server setup repository has been cloned to /home/ubuntu/server-setup
+  
+  Next steps:
+  1. SSH to server: ssh ubuntu@YOUR_SERVER_IP
+  2. cd server-setup
+  3. cp .env.example .env && vim .env
+  4. make control-plane (or make worker)
+
+# Removed automatic reboot to allow immediate configuration

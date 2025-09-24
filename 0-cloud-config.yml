@@ -28,6 +28,7 @@ packages:
   - fail2ban
   - docker.io
   - docker-compose
+  - make
 
 # Minimal SSH hardening (do not change port here to avoid lockout)
 write_files:

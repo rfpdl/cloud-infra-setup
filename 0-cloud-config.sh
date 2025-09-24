@@ -12,7 +12,7 @@ apt-get update
 apt-get upgrade -y
 
 # Install required packages
-apt-get install -y git curl wget unzip vim
+apt-get install -y git curl wget unzip vim make
 
 # Create ubuntu user if it doesn't exist (some providers use different default users)
 if ! id "ubuntu" &>/dev/null; then

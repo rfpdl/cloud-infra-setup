@@ -3,7 +3,7 @@
 # Cloud-init for initial provisioning
 # - Creates the default 'ubuntu' user with SSH key
 # - Installs essential packages
-# - Clones this repository to /home/ubuntu/srvs
+# - Clones this repository to /home/ubuntu/server-setup
 # Advanced hardening and role setup are handled by repository scripts.
 
 users:
@@ -39,19 +39,19 @@ write_files:
       ChallengeResponseAuthentication no
 
 runcmd:
-  - [ bash, -lc, 'cd /home/ubuntu && git clone https://github.com/rfpdl/cloud-infra-setup.git srvs' ]
-  - [ chown, -R, ubuntu:ubuntu, /home/ubuntu/srvs ]
-  - [ bash, -lc, 'chmod +x /home/ubuntu/srvs/*.sh || true' ]
+  - [ bash, -lc, 'cd /home/ubuntu && git clone https://github.com/rfpdl/cloud-infra-setup.git server-setup' ]
+  - [ chown, -R, ubuntu:ubuntu, /home/ubuntu/server-setup ]
+  - [ bash, -lc, 'chmod +x /home/ubuntu/server-setup/*.sh || true' ]
   - [ systemctl, restart, sshd ]
   - [ bash, -lc, 'touch /var/lib/cloud/instance/cloud-config-finished' ]
-  - [ bash, -lc, 'echo "$(date): Cloud-config completed - repo cloned to /home/ubuntu/srvs" > /var/log/cloud-config-setup.log' ]
+  - [ bash, -lc, 'echo "$(date): Cloud-config completed - repo cloned to /home/ubuntu/server-setup" > /var/log/cloud-config-setup.log' ]
 
 final_message: |
-  Repository cloned to /home/ubuntu/srvs
+  Repository cloned to /home/ubuntu/server-setup
 
   Next steps:
   1. SSH to server: ssh ubuntu@YOUR_SERVER_IP
-  2. cd /home/ubuntu/srvs
+  2. cd /home/ubuntu/server-setup
   3. cp .env.example .env && vim .env
   4. make control-plane    # or make worker
 

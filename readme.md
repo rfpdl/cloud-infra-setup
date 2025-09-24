@@ -9,7 +9,7 @@ Automated Ubuntu 24.04 LTS server configuration for Cloud Provider cloud infrast
 **Option A: Cloud Providers with cloud-init support (Hetzner, AWS, DigitalOcean, etc.)**
 Use `0-cloud-config.yml` when creating your server. This will:
 - Install git and essential packages
-- Clone this repository to `/home/ubuntu/srvs`
+- Clone this repository to `/home/ubuntu/server-setup`
 - Set proper permissions on scripts
 
 **Option B: Cloud Providers without cloud-init or manual setup**
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-setup/main/0-clou
 ssh ubuntu@YOUR_SERVER_IP
 
 # For both options, configure your environment:
-cd srvs
+cd server-setup
 cp .env.example .env
 vim .env  # Add your SSH keys and configuration
 ```
@@ -113,7 +113,7 @@ curl -fsSL https://raw.githubusercontent.com/rfpdl/cloud-infra-setup/main/0-clou
 
 # 2. Switch to ubuntu user and configure
 su - ubuntu
-cd srvs
+cd server-setup
 cp .env.example .env
 vim .env  # Add your SSH keys
 

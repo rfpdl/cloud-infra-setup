@@ -9,7 +9,7 @@ services:
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ../:/root/srvs:ro  # Mount project files for testing
+      - ../:/root/server-setup:ro  # Mount project files for testing
     networks:
       fresh-cloud-test:
         ipv4_address: 172.21.0.10
@@ -34,7 +34,7 @@ services:
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ../:/root/srvs:ro  # Mount project files for testing
+      - ../:/root/server-setup:ro  # Mount project files for testing
     networks:
       fresh-cloud-test:
         ipv4_address: 172.21.0.11

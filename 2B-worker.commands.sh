@@ -145,7 +145,16 @@ echo -e "${GREEN}Docker permissions configured${NC}"
 # 13. Initialize Docker for the user and test
 echo -e "${YELLOW}Testing Docker access...${NC}"
 sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker ps 2>/dev/null || true
-sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker compose version
+if sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker compose version >/dev/null 2>&1; then
+  echo -e "${GREEN}Docker Compose v2 available (docker compose)${NC}"
+elif command -v docker-compose >/dev/null 2>&1; then
+  sudo -u ${USERNAME} docker-compose --version
+  echo -e "${YELLOW}Using legacy docker-compose binary (v1). Consider installing docker-compose-plugin for v2.${NC}"
+else
+  echo -e "${RED}Docker Compose not found. Install one of the following:${NC}"
+  echo -e "  - ${YELLOW}docker-compose-plugin${NC} (preferred, provides 'docker compose')"
+  echo -e "  - ${YELLOW}docker-compose${NC} (legacy binary)"
+fi
 echo -e "${GREEN}Docker access verified${NC}"
 
 # 14. Create the docker network

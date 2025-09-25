@@ -130,15 +130,35 @@ if [ "${TEST_MODE:-}" = "1" ]; then
     INSTALL_FLAGS="--no-install-recommends"
     echo -e "${BLUE}[TEST_MODE] Using --no-install-recommends for lean installs${NC}"
 fi
+# Install repo management tools first so we can enable 'universe'
+apt-get install -y ${INSTALL_FLAGS} \
+    software-properties-common || true
+
+# Ensure 'universe' repository is enabled (needed on some cloud images/mirrors)
+if ! grep -q "^deb .*ubuntu.*universe" /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
+    echo -e "${YELLOW}Enabling 'universe' repository...${NC}"
+    add-apt-repository -y universe || true
+    apt-get update || true
+fi
+
+# Install core packages (without docker-compose-plugin to avoid hard failure on mirrors without it)
 apt-get install -y ${INSTALL_FLAGS} \
     fail2ban \
     ufw \
     docker.io \
     docker-compose \
-    docker-compose-plugin \
     vim \
-    unzip \
-    software-properties-common
+    unzip
+
+# Best-effort install of docker-compose-plugin (Compose v2)
+if ! docker compose version >/dev/null 2>&1; then
+    echo -e "${YELLOW}Attempting to install docker-compose-plugin (Compose v2)...${NC}"
+    if apt-get install -y ${INSTALL_FLAGS} docker-compose-plugin; then
+        echo -e "${GREEN}docker-compose-plugin installed (docker compose available)${NC}"
+    else
+        echo -e "${YELLOW}docker-compose-plugin not available on current repositories. Continuing with legacy docker-compose if present.${NC}"
+    fi
+fi
 
 # 3. Create user with proper configuration
 echo -e "${YELLOW}Creating user '${USERNAME}'...${NC}"

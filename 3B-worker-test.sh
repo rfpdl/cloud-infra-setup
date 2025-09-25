@@ -69,18 +69,23 @@ test_user_setup() {
     print_header "User Configuration Tests"
     
     print_test "User '${USERNAME}' exists"
-    if id "${USERNAME}" &>/dev/null; then
+    if timeout 3s id "${USERNAME}" &>/dev/null; then
         print_pass "User '${USERNAME}' exists"
     else
-        print_fail "User '${USERNAME}' does not exist"
+        print_fail "User '${USERNAME}' does not exist or lookup timed out"
     fi
     
     print_test "User '${USERNAME}' has correct groups"
-    if groups ${USERNAME} | grep -q "sudo\|admin" && groups ${USERNAME} | grep -q "docker"; then
+    USER_GROUPS=$(timeout 3s groups ${USERNAME} 2>/dev/null || true)
+    if echo "$USER_GROUPS" | grep -q "sudo\|admin" && echo "$USER_GROUPS" | grep -q "docker"; then
         print_pass "User '${USERNAME}' has sudo and docker groups"
     else
         print_fail "User '${USERNAME}' missing required groups"
-        print_info "Current groups: $(groups ${USERNAME})"
+        if [ -n "$USER_GROUPS" ]; then
+            print_info "Current groups: $USER_GROUPS"
+        else
+            print_info "Could not retrieve groups (lookup may have timed out)"
+        fi
     fi
     
     print_test "SSH directory permissions"

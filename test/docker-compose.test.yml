@@ -14,7 +14,7 @@ services:
       fresh-cloud-test:
         ipv4_address: 172.21.0.10
     ports:
-      - "2277:22"     # SSH
+      - "2299:22"     # SSH
       - "3000:3000"   # Dokploy
       - "9090:9090"   # Prometheus
       - "3001:3001"   # Grafana
@@ -39,7 +39,7 @@ services:
       fresh-cloud-test:
         ipv4_address: 172.21.0.11
     ports:
-      - "2278:22"     # SSH
+      - "2300:22"     # SSH
     tmpfs:
       - /tmp
       - /run

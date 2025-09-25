@@ -5,6 +5,22 @@
 # Run as root: sudo bash 1-server-hardening.sh
 
 set -e
+export DEBIAN_FRONTEND=noninteractive
+
+# Handle interrupted dpkg/apt states gracefully
+fix_dpkg() {
+    (dpkg --configure -a || true)
+    (apt-get -y install -f || true)
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock || true
+}
+
+# Auto-enable TEST_MODE when running inside a container (e.g., make test)
+if [ -z "${TEST_MODE:-}" ]; then
+    if [ -f "/.dockerenv" ] || grep -qa docker /proc/1/cgroup 2>/dev/null; then
+        export TEST_MODE=1
+        echo "[TEST_MODE] Detected container environment. Running in TEST_MODE=1 (skip apt upgrade)."
+    fi
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -97,21 +113,30 @@ echo -e "  Username: ${USERNAME}"
 echo -e "  SSH Port: ${SSH_PORT}"
 echo -e "  Fail2ban Settings: ${FAIL2BAN_MAXRETRY} retries, ${FAIL2BAN_BANTIME}s ban"
 
-# 1. Update and upgrade system packages
+# 1. Update (and optionally upgrade) system packages
 echo -e "${YELLOW}Updating system packages...${NC}"
-apt update && apt upgrade -y
+fix_dpkg
+apt-get update
+if [ "${TEST_MODE:-}" != "1" ]; then
+    apt-get upgrade -y
+else
+    echo -e "${BLUE}[TEST_MODE] Skipping apt upgrade to keep tests light${NC}"
+fi
 
 # 2. Install essential packages for security and Docker
 echo -e "${YELLOW}Installing essential packages...${NC}"
-apt install -y \
+INSTALL_FLAGS=""
+if [ "${TEST_MODE:-}" = "1" ]; then
+    INSTALL_FLAGS="--no-install-recommends"
+    echo -e "${BLUE}[TEST_MODE] Using --no-install-recommends for lean installs${NC}"
+fi
+apt-get install -y ${INSTALL_FLAGS} \
     fail2ban \
     ufw \
     docker.io \
     docker-compose \
     docker-compose-plugin \
     vim \
-    tree \
-    htop \
     unzip \
     software-properties-common
 

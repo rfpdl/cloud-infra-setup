@@ -1,3 +1,25 @@
+# Troubleshooting (Local Testing)
+
+- **Exit 137 / OOM during tests**
+  - Cause: The simulated "fresh cloud" containers perform package operations that may exceed default Docker Desktop memory.
+  - Fixes:
+    - Increase Docker Desktop memory to 6–8 GB.
+    - Tests auto-enable `TEST_MODE=1` inside containers to skip `apt upgrade` for reliability.
+    - Run only control plane tests: `make test-control-plane`.
+    - Run tests on a separate VM/server instead of a laptop.
+
+- **Port conflicts (3000/3001/9090)**
+  - If you already run Dokploy/Monitoring on the host, test ports may clash.
+  - Either change test ports in `test/docker-compose.test.yml` or remove the mappings and use `docker exec` only.
+
+- **SSH test port conflicts (2277/2278)**
+  - Change to unused host ports in `test/docker-compose.test.yml` (e.g., 2299/2300).
+
+- **sudo prompts inside test containers**
+  - The Makefile runs test targets as root inside containers to avoid interactive sudo.
+
+> TODO: Optimize test resource usage further and provide an optional lightweight test profile that avoids heavy package operations.
+
 # Cloud Infra Setup
 
 Automated Ubuntu 24.04 LTS server configuration for Cloud Provider cloud infrastructure with Control Plane (Dokploy + Grafana + Prometheus + GitLab Runner) and Worker nodes.

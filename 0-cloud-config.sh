@@ -4,12 +4,31 @@
 # Run this script on a fresh Ubuntu 24.04 LTS server after initial login
 
 set -e
+export DEBIAN_FRONTEND=noninteractive
+
+# Handle interrupted dpkg/apt states gracefully
+fix_dpkg() {
+    (dpkg --configure -a || true)
+    (apt-get -y install -f || true)
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock || true
+}
+
+# Auto-enable TEST_MODE when running inside a container (e.g., make test)
+if [ -z "${TEST_MODE:-}" ]; then
+    if [ -f "/.dockerenv" ] || grep -qa docker /proc/1/cgroup 2>/dev/null; then
+        export TEST_MODE=1
+        echo "[TEST_MODE] Detected container environment. Running in TEST_MODE=1 (skip apt upgrade)."
+    fi
+fi
 
 echo "Starting cloud-config equivalent setup..."
 
-# Update system packages
+# Update system packages (leaner in TEST_MODE)
+fix_dpkg
 apt-get update
-apt-get upgrade -y
+if [ "${TEST_MODE:-}" != "1" ]; then
+    apt-get upgrade -y
+fi
 
 # Install required packages
 apt-get install -y git curl wget unzip vim make

@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Control Plane Configuration Test Script
-# Tests control plane specific configuration after running 1-server-hardening.sh + 2A-control-plane.commands.sh
+# Control Plane Configuration Test Script (moved to test/control-plane.test.sh)
+# Tests control plane configuration after running:
+#   1-server-hardening.sh + 2-server-bootstrap.sh + 3A-control-plane.commands.sh
 
 set -e
 
@@ -307,37 +308,11 @@ test_control_plane_setup() {
     fi
 }
 
-test_system_security() {
-    print_header "System Security Tests"
-    
-    print_test "System packages are up to date"
-    if apt list --upgradable 2>/dev/null | grep -q "upgradable"; then
-        print_fail "System has available package updates"
-        print_info "Run 'apt update && apt upgrade' to update"
-    else
-        print_pass "System packages are up to date"
-    fi
-    
-    print_test "Essential security packages installed"
-    missing_packages=()
-    for package in fail2ban ufw docker.io; do
-        if ! dpkg -l | grep -q "^ii.*$package"; then
-            missing_packages+=("$package")
-        fi
-    done
-    
-    if [ ${#missing_packages[@]} -eq 0 ]; then
-        print_pass "All essential security packages are installed"
-    else
-        print_fail "Missing packages: ${missing_packages[*]}"
-    fi
-}
-
 # Main execution
 main() {
     echo -e "${BLUE}🔍 Control Plane Configuration Test Suite${NC}"
     echo -e "${BLUE}=========================================${NC}"
-    echo -e "${BLUE}Testing: 1-server-hardening.sh + 2A-control-plane.commands.sh${NC}"
+    echo -e "${BLUE}Testing: 1-server-hardening.sh + 2-server-bootstrap.sh + 3A-control-plane.commands.sh${NC}"
     
     # Run all tests
     test_user_setup
@@ -346,7 +321,6 @@ main() {
     test_fail2ban_configuration
     test_docker_configuration
     test_control_plane_setup
-    test_system_security
     
     # Summary
     print_header "Test Summary"

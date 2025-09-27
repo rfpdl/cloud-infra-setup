@@ -35,33 +35,41 @@ check-env:
 # Control Plane setup
 control-plane: check-env
 	@echo "🚀 Setting up Control Plane..."
-	sudo bash 1-server-hardening.sh
-	sudo bash 2A-control-plane.commands.sh
-	sudo bash 3A-control-plane-test.sh
+	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
+	sudo bash 2-server-bootstrap.sh
+	sudo bash 3A-control-plane.commands.sh
+	sudo bash test/control-plane.test.sh
 	@echo "✅ Control Plane setup complete!"
 
 # Worker setup  
 worker: check-env
 	@echo "🔧 Setting up Worker..."
-	sudo bash 1-server-hardening.sh
-	sudo bash 2B-worker.commands.sh
-	sudo bash 3B-worker-test.sh
+	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
+	sudo bash 2-server-bootstrap.sh
+	sudo bash 3B-worker.commands.sh
+	sudo bash test/worker.test.sh
 	@echo "✅ Worker setup complete!"
 
 # Test only targets
 test-control-plane: check-env
 	@echo "🧪 Testing Control Plane configuration..."
-	sudo bash 3A-control-plane-test.sh
+	sudo bash test/control-plane.test.sh
 
 test-worker: check-env
 	@echo "🧪 Testing Worker configuration..."
-	sudo bash 3B-worker-test.sh
+	sudo bash test/worker.test.sh
 
 # Initial setup only
 init-only: check-env
 	@echo "⚙️ Running initial setup only..."
-	sudo bash 1-server-hardening.sh
+	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
 	@echo "✅ Initial setup complete!"
+
+# Bootstrap only (Docker + Compose v2)
+bootstrap-only:
+	@echo "🐳 Running server bootstrap (Docker + Compose v2)..."
+	sudo bash 2-server-bootstrap.sh
+	@echo "✅ Bootstrap complete!"
 
 # Testing targets
 test:

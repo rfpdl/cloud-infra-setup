@@ -123,7 +123,7 @@ else
     echo -e "${BLUE}[TEST_MODE] Skipping apt upgrade to keep tests light${NC}"
 fi
 
-# 2. Install essential packages for security and Docker
+# 2. Install essential security/base packages
 echo -e "${YELLOW}Installing essential packages...${NC}"
 INSTALL_FLAGS=""
 if [ "${TEST_MODE:-}" = "1" ]; then
@@ -141,24 +141,13 @@ if ! grep -q "^deb .*ubuntu.*universe" /etc/apt/sources.list /etc/apt/sources.li
     apt-get update || true
 fi
 
-# Install core packages (without docker-compose-plugin to avoid hard failure on mirrors without it)
+# Install core packages (security/base only)
+echo -e "${YELLOW}Installing security/base packages...${NC}"
 apt-get install -y ${INSTALL_FLAGS} \
     fail2ban \
     ufw \
-    docker.io \
-    docker-compose \
     vim \
-    unzip
-
-# Best-effort install of docker-compose-plugin (Compose v2)
-if ! docker compose version >/dev/null 2>&1; then
-    echo -e "${YELLOW}Attempting to install docker-compose-plugin (Compose v2)...${NC}"
-    if apt-get install -y ${INSTALL_FLAGS} docker-compose-plugin; then
-        echo -e "${GREEN}docker-compose-plugin installed (docker compose available)${NC}"
-    else
-        echo -e "${YELLOW}docker-compose-plugin not available on current repositories. Continuing with legacy docker-compose if present.${NC}"
-    fi
-fi
+    software-properties-common || true
 
 # 3. Create user with proper configuration
 echo -e "${YELLOW}Creating user '${USERNAME}'...${NC}"
@@ -267,53 +256,7 @@ echo -e "${YELLOW}Starting fail2ban service...${NC}"
 systemctl enable fail2ban
 systemctl start fail2ban
 
-# 12. Configure Docker to use Unix socket only and start service
-echo -e "${YELLOW}Configuring Docker daemon to use Unix socket only...${NC}"
-mkdir -p /etc/docker
-if [ -f /etc/docker/daemon.json ]; then
-  cp /etc/docker/daemon.json /etc/docker/daemon.json.backup || true
-fi
-cat > /etc/docker/daemon.json << EOF
-{
-  "hosts": ["unix:///var/run/docker.sock"]
-}
-EOF
-
-# Workaround default systemd '-H fd://' which conflicts with daemon.json hosts
-mkdir -p /etc/systemd/system/docker.service.d
-cat > /etc/systemd/system/docker.service.d/override.conf << 'EOF'
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
-EOF
-
-systemctl daemon-reload
-systemctl enable docker
-echo -e "${YELLOW}Starting Docker service...${NC}"
-# Ensure containerd is running (required by dockerd)
-systemctl enable --now containerd || true
-if systemctl restart docker; then
-  echo -e "${GREEN}Docker service started with Unix socket only${NC}"
-else
-  echo -e "${RED}Docker failed to start with custom systemd override. Collecting logs...${NC}"
-  systemctl status docker -n 50 || true
-  journalctl -xeu docker.service -n 100 --no-pager || true
-  echo -e "${YELLOW}Attempting fallback: remove override and daemon.json hosts, then restart Docker...${NC}"
-  rm -f /etc/systemd/system/docker.service.d/override.conf || true
-  systemctl daemon-reload
-  if [ -f /etc/docker/daemon.json ]; then
-    grep -q '"hosts"' /etc/docker/daemon.json && (echo '{}' > /etc/docker/daemon.json) || true
-  fi
-  if systemctl restart docker; then
-    echo -e "${GREEN}Docker service started with default system configuration${NC}"
-  else
-    echo -e "${RED}Docker still failed to start after fallback. Please review system logs above.${NC}"
-    exit 1
-  fi
-fi
-
-# 13. Add user to docker group (redundant but ensures it's set)
-usermod -aG docker "$USERNAME"
+# Note: Docker installation and configuration moved to '2-server-bootstrap.sh'
 
 # 14. Restart SSH to apply hardening
 echo -e "${YELLOW}Restarting SSH service...${NC}"
@@ -326,20 +269,22 @@ touch /var/lib/cloud/instance/boot-finished
 touch /var/lib/manual-init/boot-finished
 echo "$(date): Initial setup completed via 1-server-hardening.sh" > /var/lib/manual-init/setup.log
 
-echo -e "${GREEN}✅ Complete server initial setup finished successfully!${NC}"
+echo -e "${GREEN}✅ Complete server initial setup (hardening) finished successfully!${NC}"
 echo -e "${BLUE}Configuration Summary:${NC}"
-echo -e "  ✓ User '${USERNAME}' created with sudo and docker access"
+echo -e "  ✓ User '${USERNAME}' created with sudo access"
 echo -e "  ✓ SSH hardened on port ${SSH_PORT} (key-only authentication)"
 echo -e "  ✓ Fail2ban configured for SSH protection"
-echo -e "  ✓ Docker installed and configured"
-echo -e "  ✓ All essential packages installed"
+echo -e "  ✓ Essential security packages installed (no Docker in this step)"
 
 echo -e "\n${BLUE}Next steps:${NC}"
 echo -e "  1. SSH to server: ${YELLOW}ssh -p ${SSH_PORT} ${USERNAME}@YOUR_SERVER_IP${NC}"
-echo -e "  2. Run role-specific script:"
-echo -e "     - Control Plane: ${YELLOW}sudo bash X-control-plane.commands.sh${NC}"
-echo -e "     - Worker: ${YELLOW}sudo bash Y-worker.commands.sh${NC}"
-echo -e "  3. Test configuration: ${YELLOW}sudo bash test-server-config.sh${NC}"
+echo -e "  2. Bootstrap Docker & Compose v2: ${YELLOW}sudo bash 2-server-bootstrap.sh${NC}"
+echo -e "  3. Run role-specific script:"
+echo -e "     - Control Plane: ${YELLOW}sudo bash 3A-control-plane.commands.sh${NC}"
+echo -e "     - Worker: ${YELLOW}sudo bash 3B-worker.commands.sh${NC}"
+echo -e "  4. Run tests:"
+echo -e "     - Control Plane: ${YELLOW}sudo bash 4A-control-plane-test.sh${NC}"
+echo -e "     - Worker: ${YELLOW}sudo bash 4B-worker-test.sh${NC}"
 
 echo -e "\n${RED}⚠️  IMPORTANT SECURITY NOTES:${NC}"
 echo -e "${RED}⚠️  SSH is now on port ${SSH_PORT}${NC}"

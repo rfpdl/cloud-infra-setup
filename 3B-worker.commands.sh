@@ -1,23 +1,20 @@
 #!/bin/bash
 
-# Worker Configuration Script
-# Run after 1-server-hardening.sh to configure Docker Swarm worker
+# Worker Configuration Script (renamed from 2B-worker.commands.sh)
+# Run after 1-server-hardening.sh and 2-server-bootstrap.sh
 
 set -e
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to load environment variables
 load_env() {
     local env_file=".env"
     if [ -f "$env_file" ]; then
         echo -e "${GREEN}Loading configuration from $env_file${NC}"
-        # Source the .env file, ignoring comments and empty lines
         set -a
         source <(grep -v '^#' "$env_file" | grep -v '^$')
         set +a
@@ -27,7 +24,6 @@ load_env() {
     fi
 }
 
-# Function to set default values
 set_defaults() {
     USERNAME=${USERNAME:-"ubuntu"}
     SSH_PORT=${SSH_PORT:-"22"}
@@ -37,7 +33,6 @@ set_defaults() {
     CONTROL_PLANE_IP=${CONTROL_PLANE_IP:-""}
 }
 
-# Function to validate required variables
 validate_config() {
     if [ -z "$CONTROL_PLANE_IP" ]; then
         echo -e "${RED}ERROR: CONTROL_PLANE_IP is required for worker configuration${NC}"
@@ -46,7 +41,6 @@ validate_config() {
     fi
 }
 
-# Load configuration
 load_env
 set_defaults
 validate_config
@@ -55,7 +49,7 @@ echo -e "${BLUE}🔧 Starting Worker Configuration${NC}"
 echo -e "${BLUE}User: ${USERNAME}, SSH Port: ${SSH_PORT}${NC}"
 echo -e "${BLUE}Control Plane IP: ${CONTROL_PLANE_IP}${NC}"
 
-# 7. Configure and enable fail2ban
+# Fail2ban config
 echo -e "${YELLOW}Configuring fail2ban...${NC}"
 cat > /etc/fail2ban/jail.local << EOF
 [sshd]
@@ -68,81 +62,32 @@ bantime = ${FAIL2BAN_BANTIME}
 EOF
 systemctl enable fail2ban
 systemctl start fail2ban
-echo -e "${GREEN}Fail2ban configured and started${NC}"
 
-# 8. Configure the firewall (UFW) - WORKER RULES (LOCKED DOWN)
+# Firewall rules (locked down to control plane)
 echo -e "${YELLOW}Configuring firewall for Worker (locked down)...${NC}"
-
 ufw allow ${SSH_PORT}/tcp comment 'SSH Port'
-# STRICT: Only allow Docker Swarm traffic from control plane
 ufw allow from $CONTROL_PLANE_IP to any port 2377 proto tcp comment 'Swarm Management'
 ufw allow from $CONTROL_PLANE_IP to any port 7946 proto tcp comment 'Swarm Discovery TCP'
 ufw allow from $CONTROL_PLANE_IP to any port 7946 proto udp comment 'Swarm Discovery UDP'
 ufw allow from $CONTROL_PLANE_IP to any port 4789 proto udp comment 'Overlay Network'
-# Allow outbound connections for Docker registry access
 ufw allow out 443/tcp comment 'HTTPS outbound'
 ufw allow out 80/tcp comment 'HTTP outbound'
-
-# SECURITY: Explicitly deny Docker remote API ports (should use SSH, not TCP)
 ufw deny 2375/tcp comment 'Block Docker API (unencrypted)'
 ufw deny 2376/tcp comment 'Block Docker API (TLS)'
-
 ufw reload
 ufw --force enable
-echo -e "${GREEN}Firewall configured for Worker (restricted to ${CONTROL_PLANE_IP})${NC}"
 
-# 9. Ensure Docker only listens on Unix socket (no TCP API)
-echo -e "${YELLOW}Configuring Docker daemon to use Unix socket only...${NC}"
-mkdir -p /etc/docker
-if [ -f /etc/docker/daemon.json ]; then
-  cp /etc/docker/daemon.json /etc/docker/daemon.json.backup || true
-fi
-cat > /etc/docker/daemon.json << EOF
-{
-  "hosts": ["unix:///var/run/docker.sock"]
-}
-EOF
-
-# Enable and start Docker
-echo -e "${YELLOW}Starting Docker service...${NC}"
-systemctl enable docker
-
-# Workaround Ubuntu default '-H fd://' in systemd unit which conflicts with daemon.json 'hosts'
-mkdir -p /etc/systemd/system/docker.service.d
-cat > /etc/systemd/system/docker.service.d/override.conf << 'EOF'
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
-EOF
-
-systemctl daemon-reload
-systemctl restart docker
-echo -e "${GREEN}Docker service started with Unix socket only${NC}"
-
-# 10. Create the /etc/dokploy directory and set permissions
-echo -e "${YELLOW}Setting up Dokploy directory...${NC}"
-mkdir -p /etc/dokploy
-chown ${USERNAME}:${USERNAME} /etc/dokploy
-chmod 775 /etc/dokploy
-echo -e "${GREEN}Dokploy directory configured${NC}"
-
-# 11. Ensure the user's .ssh directory has correct permissions
-echo -e "${YELLOW}Setting SSH directory permissions...${NC}"
+# SSH directory permissions
 chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.ssh
 chmod 700 /home/${USERNAME}/.ssh
 chmod 600 /home/${USERNAME}/.ssh/authorized_keys
-echo -e "${GREEN}SSH permissions configured${NC}"
 
-# 12. Fix Docker permissions for the user
-echo -e "${YELLOW}Configuring Docker permissions...${NC}"
+# Docker permissions and verification (assumes bootstrap installed Docker)
 mkdir -p /home/${USERNAME}/.docker
 chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.docker
 chmod 700 /home/${USERNAME}/.docker
 echo "export DOCKER_CONFIG=\"/home/${USERNAME}/.docker\"" >> /home/${USERNAME}/.bashrc
-echo "export DOCKER_CONFIG=\"/home/${USERNAME}/.docker\"" >> /etc/environment
-echo -e "${GREEN}Docker permissions configured${NC}"
 
-# 13. Initialize Docker for the user and test
 echo -e "${YELLOW}Testing Docker access...${NC}"
 sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker ps 2>/dev/null || true
 if sudo -u ${USERNAME} env DOCKER_CONFIG="/home/${USERNAME}/.docker" docker compose version >/dev/null 2>&1; then
@@ -155,27 +100,8 @@ else
   echo -e "  - ${YELLOW}docker-compose-plugin${NC} (preferred, provides 'docker compose')"
   echo -e "  - ${YELLOW}docker-compose${NC} (legacy binary)"
 fi
-echo -e "${GREEN}Docker access verified${NC}"
 
-# 14. Create the docker network
 echo -e "${YELLOW}Creating Dokploy network...${NC}"
 sudo -u ${USERNAME} docker network create dokploy-network 2>/dev/null || true
-echo -e "${GREEN}Dokploy network ready${NC}"
 
-# 15. Configuration complete
 echo -e "${GREEN}✅ Worker configuration completed successfully!${NC}"
-echo -e "${BLUE}Configuration Summary:${NC}"
-echo -e "  ✓ Fail2ban configured for SSH protection"
-echo -e "  ✓ Firewall configured for Worker (restricted to ${CONTROL_PLANE_IP})"
-echo -e "  ✓ Docker configured for user '${USERNAME}'"
-echo -e "  ✓ Dokploy directory and network ready"
-echo -e "  ✓ SSH permissions secured"
-
-echo -e "\n${BLUE}Next steps:${NC}"
-echo -e "  1. Join Docker Swarm from Control Plane:"
-echo -e "     ${YELLOW}docker swarm join-token worker${NC}"
-echo -e "  2. Run the join command on this worker"
-echo -e "  3. Deploy Zventy Laravel app from Control Plane"
-
-echo -e "\n${YELLOW}⚠️  Consider rebooting to ensure all changes take effect${NC}"
-echo -e "${YELLOW}⚠️  Run: sudo reboot${NC}"

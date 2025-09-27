@@ -1,10 +1,11 @@
 #cloud-config
 
-# Cloud-init for initial provisioning
-# - Creates the default 'ubuntu' user with SSH key
-# - Installs essential packages
-# - Clones this repository to /home/ubuntu/server-setup
-# Advanced hardening and role setup are handled by repository scripts.
+# 0-init.yml (cloud-init)
+# Purpose: Minimal initialization during provisioning on providers that support cloud-init.
+# - Creates default 'ubuntu' user with SSH key
+# - Installs minimal tooling (git, make, curl, wget, unzip, vim)
+# - Clones the setup repo to /home/ubuntu/server-setup
+# Follow-up configuration is performed via repository scripts after SSH.
 
 users:
   - name: ubuntu
@@ -13,7 +14,7 @@ users:
     shell: /bin/bash
     lock_passwd: true
     ssh_authorized_keys:
-      - ${ssh_public_key}
+      - ${ssh_public_key} # Replace this with your SSH public key
 
 package_update: true
 package_upgrade: true
@@ -47,7 +48,7 @@ runcmd:
   # 4) sudo bash test/control-plane.test.sh or test/worker.test.sh
   - [ systemctl, restart, sshd ]
   - [ bash, -lc, 'touch /var/lib/cloud/instance/cloud-config-finished' ]
-  - [ bash, -lc, 'echo "$(date): Cloud-config completed - repo cloned to /home/ubuntu/server-setup" > /var/log/cloud-config-setup.log' ]
+  - [ bash, -lc, 'echo "$(date): Cloud-init 0-init.yml completed - repo cloned to /home/ubuntu/server-setup" > /var/log/cloud-config-setup.log' ]
 
 final_message: |
   Repository cloned to /home/ubuntu/server-setup

@@ -150,7 +150,6 @@ mkdir -p /home/${USERNAME}/.docker
 chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.docker
 chmod 700 /home/${USERNAME}/.docker
 echo "export DOCKER_CONFIG=\"/home/${USERNAME}/.docker\"" >> /home/${USERNAME}/.bashrc
-echo "export DOCKER_CONFIG=\"/home/${USERNAME}/.docker\"" >> /etc/environment
 echo -e "${GREEN}Docker permissions configured${NC}"
 
 # 13. Initialize Docker for the user and test

@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Worker Configuration Test Script
-# Tests worker specific configuration after running 1-server-hardening.sh + 2B-worker.commands.sh
+# Worker Configuration Test Script (moved to test/worker.test.sh)
+# Tests worker configuration after running:
+#   1-server-hardening.sh + 2-server-bootstrap.sh + 3B-worker.commands.sh
 
 set -e
 
@@ -335,7 +336,7 @@ test_system_security() {
 main() {
     echo -e "${BLUE}🔍 Worker Configuration Test Suite${NC}"
     echo -e "${BLUE}===================================${NC}"
-    echo -e "${BLUE}Testing: 1-server-hardening.sh + 2B-worker.commands.sh${NC}"
+    echo -e "${BLUE}Testing: 1-server-hardening.sh + 2-server-bootstrap.sh + 3B-worker.commands.sh${NC}"
     
     # Run all tests
     test_user_setup

@@ -49,17 +49,17 @@ print_header() {
 
 print_test() {
     echo -e "${YELLOW}Testing: $1${NC}"
-    ((TESTS_TOTAL++))
+    ((++TESTS_TOTAL))
 }
 
 print_pass() {
     echo -e "${GREEN}✓ PASS: $1${NC}"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 }
 
 print_fail() {
     echo -e "${RED}✗ FAIL: $1${NC}"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 }
 
 print_info() {

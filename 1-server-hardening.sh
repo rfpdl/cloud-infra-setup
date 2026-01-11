@@ -160,7 +160,12 @@ fi
 
 # 4. Add user to required groups
 echo -e "${YELLOW}Configuring user groups...${NC}"
-usermod -aG users,admin,sudo,docker "$USERNAME"
+if getent group docker >/dev/null 2>&1; then
+    usermod -aG users,admin,sudo,docker "$USERNAME"
+else
+    usermod -aG users,admin,sudo "$USERNAME"
+    echo -e "${BLUE}Docker group not found (will be added after Docker install)${NC}"
+fi
 
 # 5. Configure sudo access
 echo -e "${YELLOW}Configuring sudo access...${NC}"

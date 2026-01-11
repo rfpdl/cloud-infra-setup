@@ -35,16 +35,16 @@ check-env:
 # Control Plane setup
 control-plane: check-env
 	@echo "🚀 Setting up Control Plane..."
-	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
+	sudo -E bash 1-server-hardening.sh
 	sudo bash 2-server-bootstrap.sh
 	sudo bash 3A-control-plane.commands.sh
 	sudo bash test/control-plane.test.sh
 	@echo "✅ Control Plane setup complete!"
 
-# Worker setup  
+# Worker setup
 worker: check-env
 	@echo "🔧 Setting up Worker..."
-	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
+	sudo -E bash 1-server-hardening.sh
 	sudo bash 2-server-bootstrap.sh
 	sudo bash 3B-worker.commands.sh
 	sudo bash test/worker.test.sh
@@ -62,7 +62,7 @@ test-worker: check-env
 # Initial setup only
 init-only: check-env
 	@echo "⚙️ Running initial setup only..."
-	SKIP_DOCKER=1 sudo -E bash 1-server-hardening.sh
+	sudo -E bash 1-server-hardening.sh
 	@echo "✅ Initial setup complete!"
 
 # Bootstrap only (Docker + Compose v2)

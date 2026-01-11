@@ -1,42 +1,60 @@
 #!/bin/bash
 
-# Control Plane Configuration Script (renamed from 2A-control-plane.commands.sh)
+# Control Plane Configuration Script
 # Run after 1-server-hardening.sh and 2-server-bootstrap.sh
 
 set -e
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Source common library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
+    source "$SCRIPT_DIR/lib/common.sh"
+else
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
 
-load_env() {
-    local env_file=".env"
-    if [ -f "$env_file" ]; then
-        echo -e "${GREEN}Loading configuration from $env_file${NC}"
-        set -a
-        source <(grep -v '^#' "$env_file" | grep -v '^$')
-        set +a
-    else
-        echo -e "${YELLOW}No .env file found, using default values${NC}"
-        echo -e "${BLUE}To customize configuration, copy .env.example to .env${NC}"
-    fi
-}
+# Error handler
+trap 'echo -e "${RED}❌ Error on line $LINENO${NC}"; exit 1' ERR
 
-set_defaults() {
+# Load environment
+if type load_env_safe &>/dev/null; then
+    load_env_safe ".env" || echo -e "${YELLOW}No .env file found, using defaults${NC}"
+else
+    [ -f ".env" ] && { set -a; source <(grep -v '^#' ".env" | grep -v '^$'); set +a; }
+fi
+
+# Set defaults
+if type set_defaults &>/dev/null; then
+    set_defaults
+else
     USERNAME=${USERNAME:-"ubuntu"}
     SSH_PORT=${SSH_PORT:-"22"}
     FAIL2BAN_FINDTIME=${FAIL2BAN_FINDTIME:-"600"}
-    FAIL2BAN_MAXRETRY=${FAIL2BAN_MAXRETRY:-"5"}
-    FAIL2BAN_BANTIME=${FAIL2BAN_BANTIME:-"600"}
+    FAIL2BAN_MAXRETRY=${FAIL2BAN_MAXRETRY:-"3"}
+    FAIL2BAN_BANTIME=${FAIL2BAN_BANTIME:-"3600"}
     CONTROL_PLANE_UI_PORT=${CONTROL_PLANE_UI_PORT:-"3000"}
     PROMETHEUS_PORT=${PROMETHEUS_PORT:-"9090"}
     GRAFANA_PORT=${GRAFANA_PORT:-"3001"}
-}
+fi
 
-load_env
-set_defaults
+# Auto-detect public IP if not set
+if [ -z "$CONTROL_PLANE_IP" ]; then
+    if type get_public_ip &>/dev/null; then
+        CONTROL_PLANE_IP=$(get_public_ip)
+    else
+        CONTROL_PLANE_IP=$(curl -s --max-time 5 https://ifconfig.me || curl -s --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')
+    fi
+fi
+
+# Validate IP
+if type validate_ipv4 &>/dev/null && ! validate_ipv4 "$CONTROL_PLANE_IP"; then
+    echo -e "${RED}Invalid CONTROL_PLANE_IP: $CONTROL_PLANE_IP${NC}"
+    exit 1
+fi
 
 echo -e "${BLUE}🚀 Starting Control Plane Configuration${NC}"
 echo -e "${BLUE}User: ${USERNAME}, SSH Port: ${SSH_PORT}${NC}"
@@ -107,4 +125,29 @@ fi
 echo -e "${YELLOW}Creating Dokploy network...${NC}"
 sudo -u ${USERNAME} docker network create dokploy-network 2>/dev/null || true
 
+# Install Dokploy (it handles swarm init internally)
+echo -e "${YELLOW}Installing Dokploy...${NC}"
+curl -sSL https://dokploy.com/install.sh | sh
+
+# Wait for Dokploy to be ready
+echo -e "${YELLOW}Waiting for Dokploy to start...${NC}"
+for i in {1..60}; do
+    if curl -s "http://localhost:${CONTROL_PLANE_UI_PORT}" >/dev/null 2>&1; then
+        echo -e "${GREEN}Dokploy is ready!${NC}"
+        break
+    fi
+    sleep 2
+done
+
+# Get swarm token and show CORRECT join command with public IP
+# (Dokploy may output internal IP which won't work for external workers)
+SWARM_TOKEN=$(docker swarm join-token worker -q 2>/dev/null || echo "")
+if [ -n "$SWARM_TOKEN" ]; then
+    echo -e "${YELLOW}========================================${NC}"
+    echo -e "${GREEN}To add workers, run this on worker nodes:${NC}"
+    echo -e "${BLUE}docker swarm join --token ${SWARM_TOKEN} ${CONTROL_PLANE_IP}:2377${NC}"
+    echo -e "${YELLOW}========================================${NC}"
+fi
+
 echo -e "${GREEN}✅ Control Plane configuration completed successfully!${NC}"
+echo -e "${BLUE}Access Dokploy at: http://${CONTROL_PLANE_IP}:${CONTROL_PLANE_UI_PORT}${NC}"

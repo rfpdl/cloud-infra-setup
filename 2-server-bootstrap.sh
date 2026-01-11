@@ -7,18 +7,24 @@
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Source common library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
+    source "$SCRIPT_DIR/lib/common.sh"
+else
+    # Fallback colors
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
 
 handle_error() {
-  echo -e "${RED}❌ Error occurred during bootstrap. Check the logs above.${NC}"
+  echo -e "${RED}❌ Error occurred during bootstrap on line $1. Check the logs above.${NC}"
   exit 1
 }
-trap 'handle_error' ERR
+trap 'handle_error $LINENO' ERR
 
 # Ensure running as root
 if [ "$EUID" -ne 0 ]; then
@@ -26,31 +32,25 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Load .env to get USERNAME if present
-load_env() {
-  local env_file=".env"
-  if [ -f "$env_file" ]; then
-    echo -e "${GREEN}Loading configuration from $env_file${NC}"
-    set -a
-    source <(grep -v '^#' "$env_file" | grep -v '^$')
-    set +a
-  else
-    echo -e "${YELLOW}No .env found. Using defaults.${NC}"
-  fi
-}
+# Load environment
+if type load_env_safe &>/dev/null; then
+    load_env_safe ".env" || echo -e "${YELLOW}No .env found. Using defaults.${NC}"
+else
+    [ -f ".env" ] && { set -a; source <(grep -v '^#' ".env" | grep -v '^$'); set +a; }
+fi
 
-set_defaults() {
-  USERNAME=${USERNAME:-"ubuntu"}
-}
+# Set defaults
+if type set_defaults &>/dev/null; then
+    set_defaults
+else
+    USERNAME=${USERNAME:-"ubuntu"}
+fi
 
 fix_dpkg() {
   (dpkg --configure -a || true)
   (apt-get -y install -f || true)
   rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock || true
 }
-
-load_env
-set_defaults
 
 echo -e "${BLUE}🚀 Starting Server Bootstrap (Docker + Compose v2)${NC}"
 

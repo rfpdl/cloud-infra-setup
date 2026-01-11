@@ -7,6 +7,20 @@
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
+# Determine script directory and source common library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
+    source "$SCRIPT_DIR/lib/common.sh"
+else
+    echo "Warning: lib/common.sh not found, using inline functions"
+    # Fallback colors
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
+
 # Handle interrupted dpkg/apt states gracefully
 fix_dpkg() {
     (dpkg --configure -a || true)
@@ -22,67 +36,71 @@ if [ -z "${TEST_MODE:-}" ]; then
     fi
 fi
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
 echo -e "${BLUE}🔧 Starting complete server initial setup...${NC}"
 
-# Function to load environment variables
-load_env() {
-    local env_file=".env"
-    if [ -f "$env_file" ]; then
-        echo -e "${GREEN}Loading configuration from $env_file${NC}"
-        # Source the .env file, ignoring comments and empty lines
+# Load environment (use safe loader if available)
+if type load_env_safe &>/dev/null; then
+    load_env_safe ".env" || echo -e "${YELLOW}No .env file found, using default values${NC}"
+else
+    # Fallback to simple loading
+    if [ -f ".env" ]; then
         set -a
-        source <(grep -v '^#' "$env_file" | grep -v '^$')
+        source <(grep -v '^#' ".env" | grep -v '^$')
         set +a
-    else
-        echo -e "${YELLOW}No .env file found, using default values${NC}"
-        echo -e "${BLUE}To customize configuration, copy .env.example to .env${NC}"
     fi
-}
+fi
 
-# Function to set default values
-set_defaults() {
+# Set defaults (use common function if available)
+if type set_defaults &>/dev/null; then
+    set_defaults
+else
     USERNAME=${USERNAME:-"ubuntu"}
     SSH_PORT=${SSH_PORT:-"22"}
     FAIL2BAN_FINDTIME=${FAIL2BAN_FINDTIME:-"600"}
-    FAIL2BAN_MAXRETRY=${FAIL2BAN_MAXRETRY:-"5"}
-    FAIL2BAN_BANTIME=${FAIL2BAN_BANTIME:-"600"}
-    SSH_MAX_AUTH_TRIES=${SSH_MAX_AUTH_TRIES:-"6"}
-    SSH_CLIENT_ALIVE_INTERVAL=${SSH_CLIENT_ALIVE_INTERVAL:-"0"}
-    SSH_CLIENT_ALIVE_COUNT_MAX=${SSH_CLIENT_ALIVE_COUNT_MAX:-"3"}
-    SSH_MAX_STARTUPS=${SSH_MAX_STARTUPS:-"10"}
-    SSH_LOGIN_GRACE_TIME=${SSH_LOGIN_GRACE_TIME:-"120"}
-}
+    FAIL2BAN_MAXRETRY=${FAIL2BAN_MAXRETRY:-"3"}
+    FAIL2BAN_BANTIME=${FAIL2BAN_BANTIME:-"3600"}
+    SSH_MAX_AUTH_TRIES=${SSH_MAX_AUTH_TRIES:-"3"}
+    SSH_CLIENT_ALIVE_INTERVAL=${SSH_CLIENT_ALIVE_INTERVAL:-"300"}
+    SSH_CLIENT_ALIVE_COUNT_MAX=${SSH_CLIENT_ALIVE_COUNT_MAX:-"2"}
+    SSH_MAX_STARTUPS=${SSH_MAX_STARTUPS:-"10:30:60"}
+    SSH_LOGIN_GRACE_TIME=${SSH_LOGIN_GRACE_TIME:-"60"}
+fi
 
 # Function to validate required variables
 validate_config() {
-    local missing_vars=()
-    
+    local errors=0
+
+    # Validate username format
+    if type validate_username &>/dev/null; then
+        if ! validate_username "$USERNAME"; then
+            echo -e "${RED}Invalid USERNAME: $USERNAME${NC}"
+            ((errors++))
+        fi
+    fi
+
+    # Validate SSH port
+    if type validate_port &>/dev/null; then
+        if ! validate_port "$SSH_PORT"; then
+            echo -e "${RED}Invalid SSH_PORT: $SSH_PORT${NC}"
+            ((errors++))
+        fi
+    fi
+
+    # Validate SSH key is present
     if [ -z "$PERSONAL_SSH_KEY" ]; then
-        missing_vars+=("PERSONAL_SSH_KEY")
+        echo -e "${RED}Missing PERSONAL_SSH_KEY${NC}"
+        ((errors++))
+    elif type validate_ssh_key &>/dev/null && ! validate_ssh_key "$PERSONAL_SSH_KEY"; then
+        echo -e "${RED}Invalid PERSONAL_SSH_KEY format${NC}"
+        ((errors++))
     fi
-    
-    # CONTROL_PLANE_SSH_KEY is optional - can be same as PERSONAL_SSH_KEY
-    # Only require it if PERSONAL_SSH_KEY is also empty
-    if [ -z "$CONTROL_PLANE_SSH_KEY" ] && [ -z "$PERSONAL_SSH_KEY" ]; then
-        missing_vars+=("At least one SSH key (PERSONAL_SSH_KEY or CONTROL_PLANE_SSH_KEY)")
-    fi
-    
-    if [ ${#missing_vars[@]} -gt 0 ]; then
-        echo -e "${RED}❌ Missing required environment variables:${NC}"
-        for var in "${missing_vars[@]}"; do
-            echo -e "${RED}  - $var${NC}"
-        done
+
+    if [ $errors -gt 0 ]; then
+        echo -e "${RED}❌ Configuration validation failed${NC}"
         echo -e "${YELLOW}Please create a .env file based on .env.example${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ Configuration validated${NC}"
 }
 
@@ -96,16 +114,14 @@ check_root() {
 
 # Function to handle errors
 handle_error() {
-    echo -e "${RED}❌ Error occurred during setup. Check the logs above.${NC}"
+    echo -e "${RED}❌ Error occurred during setup on line $1. Check the logs above.${NC}"
     exit 1
 }
 
-# Set error handler
-trap 'handle_error' ERR
+# Set error handler with line number
+trap 'handle_error $LINENO' ERR
 
 check_root
-load_env
-set_defaults
 validate_config
 
 echo -e "${BLUE}Configuration:${NC}"
@@ -179,9 +195,13 @@ fi
 # 6. Set user shell
 chsh -s /bin/bash "$USERNAME"
 
-# 7. Setup SSH directory and keys
+# 7. Setup SSH directory and keys (with secure permissions from start to avoid race condition)
 echo -e "${YELLOW}Setting up SSH access...${NC}"
-mkdir -p "/home/${USERNAME}/.ssh"
+if type create_secure_dir &>/dev/null; then
+    create_secure_dir "/home/${USERNAME}/.ssh" "$USERNAME" 700
+else
+    install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/${USERNAME}/.ssh"
+fi
 
 # Check if SSH keys already exist and are not placeholder content
 if [ -f "/home/${USERNAME}/.ssh/authorized_keys" ] && ! grep -q "# SSH keys should be managed via cloud-config" "/home/${USERNAME}/.ssh/authorized_keys"; then
